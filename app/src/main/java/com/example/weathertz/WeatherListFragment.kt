@@ -1,26 +1,27 @@
 package com.example.weathertz
 
-import android.Manifest
 import android.annotation.SuppressLint
-import android.content.pm.PackageManager
+import android.content.Context
+
+import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.core.app.ActivityCompat
+import android.widget.Toast
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.*
+import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_weather_list.*
 
 class WeatherListFragment : Fragment() {
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var locationCallback: LocationCallback
+    lateinit var fusedLocationProviderClient: FusedLocationProviderClient
+    lateinit var locationRequest: LocationRequest
+
     private val localityVM by lazy {
         ViewModelProvider(requireActivity()).get(ViewModelLocality::class.java)
     }
@@ -34,49 +35,58 @@ class WeatherListFragment : Fragment() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireActivity())
+
         val listener = context as Listener
         listener.onStartFragment()
         localityVM.getPermission.observe(requireActivity(), {
-            showLocation()
+            getLastLocation()
         })
 
     }
-
+    private fun isLocationEnabled(): Boolean {
+        val locationManager = requireContext().getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+    }
 
     @SuppressLint("MissingPermission")
-    fun showLocation(){
-        val fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireContext())
-        fusedLocationClient.lastLocation.addOnSuccessListener {
-            location_tv.text = it.latitude.toString()
+    fun getLastLocation() {
+        if (isLocationEnabled()) {
+            fusedLocationProviderClient.lastLocation.addOnCompleteListener { task ->
+                val location: Location? = task.result
+                if (location == null) {
+                    newLocationData()
+                } else {
+                    location_tv.text =
+                        "You Current Location is : Long: " + location.longitude + " , Lat: " + location.latitude
+                }
+            }
+        } else {
+//            Toast.makeText(this, "Please Turn on Your device Location", Toast.LENGTH_SHORT)
+//                .show()
         }
     }
 
-//    private fun startLocationUpdates() {
-//        if (ActivityCompat.checkSelfPermission(
-//                this,
-//                Manifest.permission.ACCESS_FINE_LOCATION
-//            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-//                this,
-//                Manifest.permission.ACCESS_COARSE_LOCATION
-//            ) != PackageManager.PERMISSION_GRANTED
-//        ) {
-//            // TODO: Consider calling
-//            //    ActivityCompat#requestPermissions
-//            // here to request the missing permissions, and then overriding
-//            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-//            //                                          int[] grantResults)
-//            // to handle the case where the user grants the permission. See the documentation
-//            // for ActivityCompat#requestPermissions for more details.
-//            return
-//        }
-//        fusedLocationClient.requestLocationUpdates(locationRequest,
-//            locationCallback,
-//            Looper.getMainLooper())
-//    }
+    @SuppressLint("MissingPermission")
+    private fun newLocationData() {
+        locationRequest = LocationRequest()
+        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        locationRequest.interval = 0
+        locationRequest.fastestInterval = 0
+        locationRequest.numUpdates = 1
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireContext())
+        fusedLocationProviderClient.requestLocationUpdates(
+            locationRequest, locationCallback, Looper.myLooper()
+        )
+    }
 
-    companion object {
-        @JvmStatic
-        fun newInstance() = WeatherListFragment()
+    private val locationCallback = object : LocationCallback() {
+        override fun onLocationResult(locationResult: LocationResult) {
+            val lastLocation: Location = locationResult.lastLocation
+            location_tv.text =
+                "You Last Location is : Long: " + lastLocation.longitude + " , Lat: " + lastLocation.latitude
+        }
     }
 
     interface Listener{
