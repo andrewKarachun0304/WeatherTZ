@@ -1,17 +1,21 @@
-package com.example.weathertz
+package com.example.weathertz.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
-import com.google.android.gms.location.*
-
-private const val PERMISSION_FINE_LOCATION = Manifest.permission.ACCESS_FINE_LOCATION
-private const val PERMISSION_COARSE_LOCATION = Manifest.permission.ACCESS_COARSE_LOCATION
-private const val PERMISSIONS_REQUEST_ACCESS_LOCATION = 1010
+import com.example.weathertz.Constants.PERMISSIONS_REQUEST_ACCESS_LOCATION
+import com.example.weathertz.Constants.PERMISSION_COARSE_LOCATION
+import com.example.weathertz.Constants.PERMISSION_FINE_LOCATION
+import com.example.weathertz.R
+import com.example.weathertz.ui.fragments.WeatherListFragment
+import com.example.weathertz.viewmodel.ViewModelLocality
 
 class MainActivity : AppCompatActivity(), WeatherListFragment.Listener {
 
@@ -30,7 +34,7 @@ class MainActivity : AppCompatActivity(), WeatherListFragment.Listener {
             ContextCompat.checkSelfPermission(this, PERMISSION_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
         ) {
-            localityVM.getPermission.postValue(true)
+            isLocationEnabled()
         } else {
             ActivityCompat.requestPermissions(
                 this,
@@ -51,9 +55,19 @@ class MainActivity : AppCompatActivity(), WeatherListFragment.Listener {
         when (requestCode) {
             PERMISSIONS_REQUEST_ACCESS_LOCATION -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    localityVM.getPermission.postValue(true)
+                    isLocationEnabled()
                 }
             }
+        }
+    }
+
+    private fun isLocationEnabled() {
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            localityVM.getPermission.postValue(true)
+        } else {
+            Toast.makeText(this, "Please turn on GPS", Toast.LENGTH_SHORT).show()
         }
     }
 

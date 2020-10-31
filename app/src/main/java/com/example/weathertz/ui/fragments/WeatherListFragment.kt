@@ -1,30 +1,36 @@
-package com.example.weathertz
+package com.example.weathertz.ui.fragments
 
 import android.annotation.SuppressLint
-import android.content.Context
 
 import android.location.Location
-import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
-import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
+import com.example.weathertz.Constants.API_KEY
+import com.example.weathertz.R
+import com.example.weathertz.retrofit.RetrofitFactory
+import com.example.weathertz.utils.launchIO
+import com.example.weathertz.utils.launchUI
+import com.example.weathertz.viewmodel.ViewModelLocality
 import com.google.android.gms.location.*
-import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_weather_list.*
 
 class WeatherListFragment : Fragment() {
+    private val retrofit by lazy {
+        RetrofitFactory.getInstance()
+    }
     lateinit var fusedLocationProviderClient: FusedLocationProviderClient
     lateinit var locationRequest: LocationRequest
 
     private val localityVM by lazy {
         ViewModelProvider(requireActivity()).get(ViewModelLocality::class.java)
     }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -35,36 +41,30 @@ class WeatherListFragment : Fragment() {
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         super.onActivityCreated(savedInstanceState)
 
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireActivity())
+        fusedLocationProviderClient =
+            LocationServices.getFusedLocationProviderClient(requireActivity())
 
         val listener = context as Listener
         listener.onStartFragment()
         localityVM.getPermission.observe(requireActivity(), {
             getLastLocation()
         })
+    }
 
-    }
-    private fun isLocationEnabled(): Boolean {
-        val locationManager = requireContext().getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-    }
 
     @SuppressLint("MissingPermission")
     fun getLastLocation() {
-        if (isLocationEnabled()) {
+        launchIO {
             fusedLocationProviderClient.lastLocation.addOnCompleteListener { task ->
                 val location: Location? = task.result
                 if (location == null) {
                     newLocationData()
                 } else {
-                    location_tv.text =
-                        "You Current Location is : Long: " + location.longitude + " , Lat: " + location.latitude
+                    launchUI {
+                        startGeoResponse("${location.latitude}, ${location.longitude}")
+                    }
                 }
             }
-        } else {
-//            Toast.makeText(this, "Please Turn on Your device Location", Toast.LENGTH_SHORT)
-//                .show()
         }
     }
 
@@ -75,7 +75,8 @@ class WeatherListFragment : Fragment() {
         locationRequest.interval = 0
         locationRequest.fastestInterval = 0
         locationRequest.numUpdates = 1
-        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(requireContext())
+        fusedLocationProviderClient =
+            LocationServices.getFusedLocationProviderClient(requireContext())
         fusedLocationProviderClient.requestLocationUpdates(
             locationRequest, locationCallback, Looper.myLooper()
         )
@@ -83,13 +84,38 @@ class WeatherListFragment : Fragment() {
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
-            val lastLocation: Location = locationResult.lastLocation
-            location_tv.text =
-                "You Last Location is : Long: " + lastLocation.longitude + " , Lat: " + lastLocation.latitude
+            launchIO {
+                val lastLocation: Location = locationResult.lastLocation
+                launchUI {
+                    startGeoResponse("${lastLocation.latitude}, ${lastLocation.longitude}")
+                }
+            }
         }
     }
 
-    interface Listener{
+    private fun startGeoResponse(q: String) {
+        launchIO {
+            val geoResponse = retrofit.getCityKeyAsync(
+                apiKey = API_KEY,
+                q = q,
+                language = "ru-ru"
+            ).await()
+            val response = geoResponse.body()
+            startWeatherForecast(response?.key ?: "")
+        }
+    }
+
+    private suspend fun startWeatherForecast(key: String) {
+        val forecastResponse = retrofit.getForecastAsync(
+            locationKey = key
+        ).await()
+        val response = forecastResponse.body()
+        launchUI {
+            location_tv.text = response.toString()
+        }
+    }
+
+    interface Listener {
         fun onStartFragment()
     }
 }
